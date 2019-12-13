@@ -4,21 +4,24 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"time"
 )
 
 var connList = make(map[string]*net.Conn)
-var ipp string
 
 func main() {
 	// 表示监听本地所有ip的8080端口，也可以这样写：addr := ":8080"
-	addr := "0.0.0.0:8888"
+	addr := "0.0.0.0:8889"
 	listener, err := net.Listen("tcp", addr)
 	CheckError(err)
 	defer listener.Close()
+
+	go webServer()
 
 	//开启多个协程
 	for {
@@ -29,6 +32,46 @@ func main() {
 			continue
 		}
 		go handleConnection(conn, 10)
+	}
+}
+
+// hello world, the web server
+// w: 给客户端回复数据， req: 读取客户端发送的数据
+func HelloServer(w http.ResponseWriter, req *http.Request) {
+	// 打印客户端头信息
+	fmt.Println(req.Method)
+	fmt.Println(req.Header)
+	fmt.Println(req.Body)
+	fmt.Println(req.URL)
+	fmt.Println(req.Form.Get("code"))
+
+	req.ParseForm()
+	d := req.Form
+	fmt.Println(d)
+	fmt.Println(req.PostForm)
+
+	//fmt.Println(req.Form.Get("code"))
+	//if len(req.Form) > 0 {
+	//	for k,v := range req.Form {
+	//		fmt.Printf("%s=%s\n", k, v[0])
+	//	}
+	//}
+
+	//aa
+	fmt.Println(req.URL.Query().Get("name"))
+
+	// 给客户端回复数据
+	io.WriteString(w, "hello, world!\n")
+	w.Write([]byte("lisa"))
+}
+func webServer() {
+	// 注册函数，用户连接， 自动调用指定处理函数
+	http.HandleFunc("/hello", HelloServer)
+
+	// 监听绑定
+	err := http.ListenAndServe(":12345", nil)
+	if err != nil {
+		log.Fatal("ListenAndServe: ", err)
 	}
 }
 
@@ -66,7 +109,7 @@ func HeartBeating(conn net.Conn, readerChannel chan byte, timeout int) {
 	select {
 	case fk := <-readerChannel:
 		Log(conn.RemoteAddr().String(), "receive data string:", string(fk))
-		Log("注册时间")
+		Log("心跳重新时间")
 		conn.SetDeadline(time.Now().Add(time.Duration(timeout) * time.Second))
 		conn.Write([]byte("socket服务心跳成功的消息2222..."))
 		break
@@ -82,22 +125,6 @@ func GravelChannel(n []byte, mess chan byte) {
 		mess <- v
 	}
 	close(mess)
-}
-
-func LoopClient() {
-	for range time.Tick(time.Millisecond * 3000) {
-		fmt.Println("dddd")
-		for k := range connList {
-			fmt.Println("dddd2222")
-			if k != "" {
-				fmt.Println("dddd33333")
-				client := connList[k]
-				(*client).Write([]byte("socket服务端发送心跳成功1111..."))
-			} else {
-				fmt.Println("没有客户端")
-			}
-		}
-	}
 }
 
 // 日志
